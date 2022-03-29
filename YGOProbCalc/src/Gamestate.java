@@ -1,6 +1,6 @@
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.Hashtable;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 public class Gamestate {
@@ -8,9 +8,8 @@ public class Gamestate {
 	int[] preload_indices;
 	Locations locations;
 	List<Trigger> triggers;
-	Hashtable<Action, Boolean> is_on;//TODO: Make into array
+	HashMap<Action, Boolean> is_on;//TODO: Make into array
 	List<Modification> log;
-	int[] initial_deck;
 	
 	public Gamestate()
 	{
@@ -33,9 +32,8 @@ public class Gamestate {
 		}
 		preloads = new Preloads(locations, quantities);
 		preload_indices = new int[Gov.num_locations()];
-		initial_deck = locations.locations[0].clone();
 		triggers = new ArrayList<Trigger>();
-		is_on = new Hashtable<Action, Boolean>();
+		is_on = new HashMap<Action, Boolean>();
 		for(Action action : Action.actions)
 		{
 			is_on.put(action, action.default_live);
@@ -168,7 +166,7 @@ public class Gamestate {
 						{
 							if(i==-1)
 							{
-								available_at_loc.add(new int[] {j, 3});
+								available_at_loc.add(new int[] {j, 5});
 							}
 							else
 							{
@@ -179,14 +177,16 @@ public class Gamestate {
 				}
 				else
 				{
-					if(i==-1)
+					if(locations.has(cond.card_num, i))
 					{
-						available_at_loc.add(new int[] {cond.card_num, 5});
-					}
-					else
-					{
-						if(locations.has(cond.card_num, i))
+						if(i==-1)
+						{
+							available_at_loc.add(new int[] {cond.card_num, 5});
+						}
+						else
+						{
 							available_at_loc.add(new int[] {cond.card_num, locations.locations[i][cond.card_num]});
+						}
 					}
 				}
 				available.add(available_at_loc);
@@ -232,7 +232,7 @@ public class Gamestate {
 	public List<Modification> modifications(Action action, Possibility poss)
 	{
 		List<Modification> modifications = new ArrayList<Modification>();
-		int length = Gov.num_locations();		
+		int length = Gov.num_locations();
 		List<List<Movement[]>> movement_set = new ArrayList<List<Movement[]>>();
 		for(Condition cond : poss.conditions)
 		{
@@ -246,7 +246,6 @@ public class Gamestate {
 		}
 		Movement[][] movement_lists = cartesian_product(movement_set);
 		
-		
 		List<Action> turn_off = new ArrayList<Action>();
 		for(Action a : action.turn_off)
 		{
@@ -259,20 +258,64 @@ public class Gamestate {
 			if(is_on.get(a)==false)
 				turn_on.add(a);
 		}
+		action.switch_states.forEach((action1, action2) ->
+		{
+			if((is_on.get(action1)==true) && (is_on.get(action2)==false))
+			{
+				turn_off.add(action1);
+				turn_on.add(action2);
+			}
+			else if((is_on.get(action1)==false) && (is_on.get(action2)==true))
+			{
+				turn_on.add(action1);
+				turn_off.add(action2);
+			}
+		});
 		boolean problem;
-		//can randomize:
+		//to randomize:
 		//while(movement_lists.size()>0)
 		//List<Movement> movements = movement_lists.remove((int)(Math.random()*movement_lists.size()));
+		int level_sum;
 		for(Movement[] movements : movement_lists)
 		{
 			problem = false;
+			level_sum = 0;
 			List<Movement> move_log = new ArrayList<Movement>();
 			List<Trigger> new_triggers = new ArrayList<Trigger>();
 			new_triggers.addAll(action.triggers);
 			new_triggers.addAll(poss.trigger);
 			Locations locations_save = locations.copy();
+			if(poss.sum >= 1)
+			{
+				for(Movement m : movements)
+				{
+					level_sum += m.card.level;
+//					System.out.print(m.card.level + " ");
+				}
+//				System.out.println("Sum: " + level_sum);
+				if(level_sum != poss.sum)
+				{
+					locations = locations_save;
+					problem = true;
+				}
+			}
+			
+			if(problem)
+				continue;
+			
+			int field_addition = 0;
 			for(Movement m : movements)
 			{
+				if(m.destination == 2)
+				{
+					field_addition++;
+					if(!locations.notFull(2, field_addition))
+					{
+						locations = locations_save;
+						problem = true;
+						break;
+					}
+				}
 				if(!locations.can(m))
 				{
 					locations = locations_save;
@@ -302,20 +345,19 @@ public class Gamestate {
 						{
 							int card_num = preloads.preloads.get(i).get(preload_indices[i]);
 							preload_indices[i]+=1;
-							double rand = Math.random();
-							double original = (double) initial_deck[card_num];
-							double current = (double) locations.locations[0][card_num];
-							boolean dont_skip = rand>(original-current)/original;
-							
-							if(dont_skip)
-							{
-								Movement m = new Movement(card_num, 0, i);
-								move_log.add(m);
-								new_triggers.addAll(locations.move(m));
+							try {
+								if(!locations.has(card_num, j))
+									j--;
+								else
+								{
+									Movement m = new Movement(card_num, 0, i);
+									move_log.add(m);
+									new_triggers.addAll(locations.move(m));
+								}
 							}
-							else
+							catch(Exception e)
 							{
-								j--;
+								System.out.print("Error: " + card_num + ", " + j);
 							}
 						}
 					}
@@ -365,23 +407,6 @@ public class Gamestate {
 			}
 		}
 		return false;
-	}
-	public String toString()
-	{
-		String s = "Gamestate info:\n";
-		for(int i = 1; i<locations.locations.length; i++)
-		{
-			if(locations.location_sizes[i]==0)
-				continue;
-			s=s+"In "+Gov.locations[i]+":\n";
-			for(int j = 0; j<Card.num_created; j++)
-			{
-				if(locations.locations[i][j]==0)
-					continue;
-				s=s+locations.locations[i][j]+" copies of "+Card.num_to_card.get(j).name+"\n";
-			}
-		}
-		return s;
 	}
 	
 }

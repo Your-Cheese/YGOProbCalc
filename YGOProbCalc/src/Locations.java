@@ -3,6 +3,7 @@ import java.util.List;
 public class Locations {
 	int[][] locations;
 	int[] location_sizes;
+	
 	public Locations()
 	{
 		locations = new int[Gov.num_locations()][Card.num_created];
@@ -16,13 +17,14 @@ public class Locations {
 		{
 			moverand(0,1);
 		}
-		
 	}
+	
 	public Locations(int[][] locations, int[] location_sizes)
 	{
 		this.locations=locations;
 		this.location_sizes=location_sizes;
 	}
+	
 	public Locations copy()
 	{
 		int[][] new_locations = new int[locations.length][locations[0].length];
@@ -42,13 +44,21 @@ public class Locations {
 	}
 	public boolean has(int card_num, int loc)
 	{
-		return loc == -1 || locations[loc][card_num]>0 ;
+		return loc == -1 || locations[loc][card_num] > 0;
+	}
+	public boolean notFull(int dest, int num_moved)
+	{
+		if(dest == 2)
+		{
+			return (location_sizes[dest] + num_moved) < 7;
+		}
+		return true;
 	}
 	public boolean can(Movement m)
 	{
 		return has(m.card_num, m.origin);
 	}
-	/*public void fast_move(int quantity, int card_num, int in, int out)
+	public void fast_move(int quantity, int card_num, int in, int out)
 	{
 		if(in!= -1)
 		{
@@ -60,13 +70,9 @@ public class Locations {
 			location_sizes[out]+= quantity;
 			locations[out][card_num]+= quantity;
 		}
-	}*/
-	
-	public List<Trigger> move(Movement movement)
+	}
+	public List<Trigger> move(int card_num, int in, int out)
 	{
-		int in = movement.origin;
-		int out = movement.destination;
-		int card_num = movement.card_num;
 		if(in!= -1)
 		{
 			location_sizes[in]--;
@@ -79,12 +85,20 @@ public class Locations {
 		}
 		return MT.library[card_num][in+1][out+1];
 	}
+	public List<Trigger> move(Movement movement)
+	{
+		int in = movement.origin;
+		int out = movement.destination;
+		int card_num = movement.card_num;
+		return(move(card_num,in,out));
+	}
 	//Do not use with -1, it wouldn't make sense.
 	public int getrand(int in)
 	{
 		if(location_sizes[in]==0)
 		{
-			System.out.println("Nothing left in "+Gov.locations[in]);
+			System.out.println("Too many preloads");
+			System.exit(0);
 		}
 		int index = (int) (Math.random()*location_sizes[in]);
 		int card_num= -1;
@@ -115,12 +129,9 @@ public class Locations {
 		List<Trigger> ret = new ArrayList<Trigger>();
 		for(int i=0; i<locations[in].length; i++)
 		{
-			if(locations[in][i]>0)
-			{
-				locations[out][i]+=locations[in][i];
-				locations[in][i]=0;
-				ret.addAll(MT.library[i][in+1][out+1]);
-			}
+			locations[out][i]+=locations[in][i];
+			locations[in][i]=0;
+			ret.addAll(MT.library[i][in+1][out+1]);
 		}
 		location_sizes[out]+=location_sizes[in];
 		location_sizes[in]=0;
@@ -131,14 +142,13 @@ public class Locations {
 		List<Trigger> ret = new ArrayList<Trigger>();
 		for(int i=0; i<locations[in].length; i++)
 		{
-			if(locations[in][i]>0)
+			for(int j = 0; j<locations[in][i]; j++)
 			{
-				for(int j = 0; j<locations[in][i]; j++)
-					move_log.add(new Movement(i, in, out));
-				locations[out][i]+=locations[in][i];
-				locations[in][i]=0;
-				ret.addAll(MT.library[i][in+1][out+1]);
+				move_log.add(new Movement(i, in, out));
 			}
+			locations[out][i]+=locations[in][i];
+			locations[in][i]=0;
+			ret.addAll(MT.library[i][in+1][out+1]);
 		}
 		location_sizes[out]+=location_sizes[in];
 		location_sizes[in]=0;

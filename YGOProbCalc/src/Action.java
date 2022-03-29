@@ -1,4 +1,5 @@
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 public class Action {
 	static List<Action> actions;
@@ -15,11 +16,10 @@ public class Action {
 	List<Possibility> possibilities= new ArrayList<Possibility>(5);;
 	List<Action> turn_on = new ArrayList<Action>();;
 	List<Action> turn_off = new ArrayList<Action>();
+	HashMap<Action, Action> switch_states = new HashMap<Action, Action>();
 	List<Trigger> triggers = new ArrayList<Trigger>();
 	
 	boolean move_all=false;
-	boolean first = false;
-	boolean mandatory = true;//only considered if triggered. All open actions are treated as optional unless in guarantee
 	int move_all_origin = -1;
 	int move_all_destination = -1;
 
@@ -47,18 +47,9 @@ public class Action {
 		possibilities.add(new Possibility(action,conditions));
 		return this;
 	}
-	public Action guarantee_poss(Condition...conditions ) 
+	public Action poss(int sum, Condition...conditions ) 
 	{
-		Possibility poss = new Possibility(conditions);
-		poss.guarantee=true;
-		possibilities.add(poss);
-		return this;
-	}
-	public Action guarantee_poss(Action action, Condition... conditions) // for triggers, will only execute the first one. Think allure/vendor
-	{
-		Possibility poss = new Possibility(action,conditions);
-		poss.guarantee=true;
-		possibilities.add(poss);
+		possibilities.add(new Possibility(sum, conditions));
 		return this;
 	}
 	public Action no_conditions()
@@ -75,14 +66,6 @@ public class Action {
 			turn_on.add(action);
 		return this;
 	}
-	public Action turnon(Action...actions)
-	{
-		for(Action action : actions)
-		{
-			turnon(action);
-		}
-		return this;
-	}
 	public Action turnoff(Action action)
 	{
 		if(turn_on.contains(action))
@@ -91,14 +74,13 @@ public class Action {
 			turn_off.add(action);
 		return this;
 	}
-	public Action turnoff(Action...actions)
+	
+	public Action onOff(Action action1, Action action2)
 	{
-		for(Action action : actions)
-		{
-			turnoff(action);
-		}
+		switch_states.put(action1, action2);
 		return this;
 	}
+	
 	public Action turnoff_all()
 	{
 		turn_off = new ArrayList<Action>(actions);
@@ -134,16 +116,6 @@ public class Action {
 	public Action open()
 	{
 		open_actions.add(this);
-		return this;
-	}
-	public Action first()
-	{
-		first = true;
-		return this;
-	}
-	public Action optional()
-	{
-		mandatory = false;
 		return this;
 	}
 }
